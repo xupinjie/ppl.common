@@ -136,66 +136,65 @@ bool compileOclKernels(FrameChain* frame_chain, const std::string& kernel_name) 
     const char* source_file_name = frame_chain->getSourceFileName();
 
     if (creating_program_type == WITH_BINARIES) {
-        // size_t binaries_length;
-        // unsigned char** binaries_data = new unsigned char*[1];
-        // bool status = retrieveKernelBinaries(project_name, kernel_name, &binaries_length, binaries_data);
-        // if (status) {
+        //size_t binaries_length;
+        //unsigned char** binaries_data = new unsigned char*[1];
+        //bool status = retrieveKernelBinaries(project_name, kernel_name, &binaries_length, binaries_data);
+        //if (status) {
         const uint8_t* binaries_data = nullptr;
         size_t binaries_length = 0;
         LockKernelBinaryDB();
-        int result = FindKernelBinary(project_name.c_str(), source_file_name, build_options.c_str(), &binaries_data,
-                                      &binaries_length);
+        int result = FindKernelBinary(project_name.c_str(), source_file_name, build_options.c_str(),
+                &binaries_data, &binaries_length);
         UnlockKernelBinaryDB();
         if (0 == result) {
             cl_int binary_status;
             cl_device_id gpu_device = frame_chain->getDeviceId();
             program = clCreateProgramWithBinary(context, 1, &gpu_device, &binaries_length,
-                                                (const unsigned char**)&binaries_data, &binary_status, &error_code);
+                    (const unsigned char**)&binaries_data, &binary_status, &error_code);
             if (binary_status != CL_SUCCESS || error_code != CL_SUCCESS) {
                 LOG(ERROR) << "Call clCreateProgramWithBinary() failed.";
                 return false;
             }
+
+            bool succeeded = buildProgram(program, device_id, build_options);
+            if (!succeeded) {
+                LOG(ERROR) << "Call buildProgram() failed.";
+                return false;
+            }
+            frame_chain->setProgram(program);
+            return true;
         } else {
             LOG(ERROR) << "Call FindKernelBinary() failed.";
             return false;
         }
     } else if (creating_program_type == WITH_SOURCE) {
-        // const char* source_str = frame_chain->getCodeString();
-        // const size_t kernel_length = strlen(source_str);
-        LockKernelSourceDB();
-        const uint8_t* source_str = nullptr;
-        size_t kernel_length = 0;
-        int result = FindKernelSource(project_name.c_str(), source_file_name, nullptr, &source_str, &kernel_length);
-        UnlockKernelSourceDB();
-        if (0 == result) {
-            cl_device_id gpu_device = frame_chain->getDeviceId();
-            program = clCreateProgramWithSource(context, 1, (const char**)&source_str, &kernel_length, &error_code);
-            if (error_code != CL_SUCCESS) {
-                LOG(ERROR) << "Call clCreateProgramWithSource() failed with code: " << error_code;
-                return false;
-            }
-        } else {
-            LOG(ERROR) << "Call FindKernelBinary() failed.";
+        const char* source_str = frame_chain->getCodeString();
+        const size_t kernel_length = strlen(source_str);
+        program = clCreateProgramWithSource(context, 1, &source_str, &kernel_length, &error_code);
+        if (error_code != CL_SUCCESS) {
+            LOG(ERROR) << "Call clCreateProgramWithSource() failed with code: " << error_code;
             return false;
         }
+
+        frame_chain->setProgram(program);
+
+        bool succeeded = buildProgram(program, device_id, build_options);
+        if (!succeeded) {
+            return false;
+        }
+
+        if (save_program_binary_flag) {
+            bool succeeded = saveProgramBinary(program, project_name.c_str(), source_file_name, build_options.c_str());
+            if (!succeeded) {
+                return false;
+            }
+        }
+
+        return true;
     } else {
         LOG(ERROR) << "CreateKernel falied, because flag is an invalid value.";
         return false;
     }
-
-    bool succeeded = buildProgram(program, device_id, build_options);
-    if (!succeeded) {
-        LOG(ERROR) << "Call buildProgram() failed.";
-        return false;
-    }
-    frame_chain->setProgram(program);
-    if (creating_program_type == WITH_SOURCE && save_program_binary_flag) {
-        bool succeeded = saveProgramBinary(program, project_name.c_str(), source_file_name, build_options.c_str());
-        if (!succeeded) {
-            return false;
-        }
-    }
-
     return true;
 }
 
