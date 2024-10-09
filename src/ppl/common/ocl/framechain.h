@@ -44,6 +44,7 @@ enum CreatingProgramTypes {
 enum PlatformType0 {
     PlatformType0_QCOM = 0,
     PlatformType0_ARM = 1,
+    PlatformType0_INTEL = 2,
     PlatformType0_invalid = 0xffffffff,
 };
 
@@ -52,9 +53,15 @@ struct QCOM_ext {
     bool is_support_subgroup_shuffle = false;
 };
 
+struct INTEL_ext {
+    //shuffle vectors and rotate2
+    bool is_support_intel_enhanced_shuffle = false;
+};
+
 union PlatformOnly_ext {
     struct QCOM_ext;
     struct ARM_ext;
+    struct INTEL_ext;
 };
 
 typedef struct eventNode {
@@ -66,7 +73,7 @@ typedef struct eventNode {
 
 class FrameChain {
 public:
-    FrameChain(bool profiling);
+    FrameChain(bool profiling, int perf_hint, int priority_hint);
     FrameChain(const cl_command_queue& queue);
     ~FrameChain();
 
@@ -152,6 +159,8 @@ public:
     }
     cl_command_queue getTuningQueue();
 
+    bool ifSupportQcomHints();
+
     // extention related interfaces
     void get_extention_info();
 
@@ -186,10 +195,14 @@ public:
     QCOM_ext* getQcomExtInfo() {
         return (QCOM_ext*)&PlatformOnly_ext_info;
     }
+    INTEL_ext* getIntelExtInfo() {
+        return (INTEL_ext*)&PlatformOnly_ext_info;
+    }
+
     // todo, other platforms
 
 protected:
-    bool createDefaultOclFrame(bool profiling);
+    bool createDefaultOclFrame(bool profiling, int perf_hint, int priority_hint);
     bool queryProfiling();
 
 private:
@@ -212,6 +225,7 @@ private:
     std::string project_name_;
     std::string function_name_;
     std::string compile_options_;
+    std::string compile_options_ext_defaults_;
     bool profiling_;
     bool save_program_binary_;
     uint32_t opt_level_;
@@ -233,7 +247,7 @@ private:
     PlatformOnly_ext PlatformOnly_ext_info;
 };
 
-void createSharedFrameChain(bool profiling);
+void createSharedFrameChain(bool profiling, int perf_hint, int priority_hint);
 void createSharedFrameChain(const cl_command_queue& queue);
 FrameChain* getSharedFrameChain();
 
